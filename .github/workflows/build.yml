@@ -52,17 +52,9 @@ jobs:
           echo "RELEASE_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
         shell: bash
 
-      - name: Download GeoLite2 CSV
-        run: |
-          # Создаем папку, которую требует генератор
-          mkdir -p geolite2
-          # Скачиваем необходимые файлы (используем зеркало LoyalSoldier, как в вашем конфиге)
-          curl -sSL https://github.com -o geolite2/GeoLite2-Country-Locations-en.csv
-          curl -sSL https://github.com -o geolite2/GeoLite2-Country-Blocks-IPv4.csv
-          curl -sSL https://github.com -o geolite2/GeoLite2-Country-Blocks-IPv6.csv
-
       - name: Inject mobile whitelist and fix config
         run: |
+          cp config.json geoip/config.json
           cp mobile-whitelist/ipwhitelist.txt geoip/mobile-whitelist.txt
           sudo apt-get update && sudo apt-get install -y jq
 
