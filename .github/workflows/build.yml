@@ -15,9 +15,6 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     name: Build
@@ -29,7 +26,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout runetfreedom/geoip
+      - name: Checkout runetfreedom geoip
         uses: actions/checkout@v4
         with:
           repository: runetfreedom/geoip
@@ -50,35 +47,40 @@ jobs:
         run: |
           echo "TAG_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
           echo "RELEASE_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
-        shell: bash
 
-      - name: Inject mobile whitelist and fix config
+      - name: Inject mobile list into config
         run: |
-          # Копируем конфиг из твоего репозитория в папку генератора
-          cp config.json geoip/config.json
-          # Копируем скачанный вайтлист в папку генератора
-          cp mobile-whitelist/ipwhitelist.txt geoip/mobile-whitelist.txt
-          
-          sudo apt-get update && sudo apt-get install -y jq
+          sudo apt-get update
+          sudo apt-get install -y jq
 
-          # 1. Добавляем в секцию input новый источник
-          # 2. Добавляем "mobile-whitelist" во все списки wantedList в output
+          cp config.json geoip/config.json
+
+          if [ -f mobile-whitelist/ipwhitelist.txt ]; then
+            cp mobile-whitelist/ipwhitelist.txt geoip/mobile-blacklist.txt
+            echo "Mobile list size:"
+            wc -l geoip/mobile-blacklist.txt
+          else
+            echo "Mobile whitelist not found"
+            exit 1
+          fi
+
           jq '.input += [{
             "type": "text",
             "action": "add",
             "args": {
-              "name": "mobile-whitelist",
-              "uri": "file://./mobile-whitelist.txt"
+              "name": "mobile-blacklist",
+              "uri": "file://./mobile-blacklist.txt"
             }
-          }] | 
-          (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mobile-whitelist"]' \
+          }] |
+          (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mobile-blacklist"]' \
           geoip/config.json > geoip/config-new.json
 
           mv geoip/config-new.json geoip/config.json
 
       - name: Build geoip generator
         run: |
-          cd geoip && go build -o ../geoip-bin ./
+          cd geoip
+          go build -o ../geoip-bin ./
 
       - name: Build geoip databases
         run: |
@@ -86,7 +88,7 @@ jobs:
 
       - name: Verify mmdb files
         run: |
-          go install ://github.com
+          go install github.com/maxmind/mmdbverify@latest
           for name in ./output/*.mmdb; do
             [ -f "$name" ] || continue
             $(go env GOPATH)/bin/mmdbverify -file "${name}"
@@ -94,7 +96,7 @@ jobs:
 
       - name: Generate sha256 checksums
         run: |
-          cd ./output || exit 1
+          cd output
           for name in *.dat *.mmdb; do
             [ -f "$name" ] || continue
             sha256sum "${name}" > "${name}.sha256sum"
@@ -102,21 +104,22 @@ jobs:
 
       - name: Remove temporary files
         run: |
-          # Удаляем лишнее ДО пуша и релиза
-          rm -rf ./output/*.{gz,zip}
-          rm -rf ./output/GeoLite2-*
-          rm -rf ./output/{clash,dat,mrs,nginx,srs,surge,text}
+          rm -f ./output/*.gz ./output/*.zip || true
+          rm -rf ./output/GeoLite2-* || true
+          rm -rf ./output/{clash,dat,mrs,nginx,srs,surge,text} || true
 
-      - name: Git push assets to "release" branch
+      - name: Git push assets to release branch
         run: |
-          cd output || exit 1
+          cd output
           git init
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git checkout -b release
           git add -A
           git commit -m "${{ env.RELEASE_NAME }}"
-          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}"
+
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
           git push -f origin release
 
       - name: Upload files to GitHub release
@@ -131,8 +134,8 @@ jobs:
 
       - name: Purge jsdelivr CDN
         run: |
-          cd output || exit 1
+          cd output
           for file in *; do
             [ -f "$file" ] || continue
-            curl -s "https://purge.jsdelivr.net{{ github.repository }}@release/${file}" || true
-          done
+            curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@release/${file}" || true
+          doneы
