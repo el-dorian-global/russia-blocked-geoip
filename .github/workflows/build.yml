@@ -54,18 +54,20 @@ jobs:
 
       - name: Inject mobile whitelist and fix config
         run: |
+          # Копируем список во вложенную папку geoip
           cp mobile-whitelist/ipwhitelist.txt geoip/mobile-whitelist.txt
+          
           sudo apt-get update && sudo apt-get install -y jq
 
-          # Добавляем в input (с правильным action) и в rules
+          # Добавляем в секцию input ПРАВИЛЬНУЮ структуру для этого генератора
+          # Используем file:// для локального пути внутри контейнера
           jq '.input += [{
             "type": "text",
             "action": "add",
-            "args": ["mobile-whitelist"],
-            "file": "mobile-whitelist.txt"
-          }] | .rules += [{
-            "tag": "mobile-whitelist",
-            "file": "mobile-whitelist.txt"
+            "args": {
+              "name": "mobile-whitelist",
+              "uri": "file://mobile-whitelist.txt"
+            }
           }]' geoip/config.json > geoip/config-new.json
 
           mv geoip/config-new.json geoip/config.json
@@ -76,13 +78,13 @@ jobs:
 
       - name: Build geoip databases
         run: |
-          # Используем конфиг, который мы только что пропатчили внутри папки geoip
+          # Запуск из корня, конфиг внутри папки geoip
           ./geoip-bin convert -c ./geoip/config.json
 
       - name: Verify mmdb files
         run: |
           cd ./output || exit 1
-          go install -v github.com/maxmind/mmdbverify@latest
+          go install -v ://github.com
           for name in *.mmdb; do
             $(go env GOPATH)/bin/mmdbverify -file "${name}"
           done
@@ -103,14 +105,14 @@ jobs:
           git checkout -b release
           git add -A
           git commit -m "${{ env.RELEASE_NAME }}"
-          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}"
           git push -f origin release
 
       - name: Purge jsdelivr CDN
         run: |
           cd output || exit 1
           for file in *; do
-            curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@release/${file}" || true
+            curl -s "https://purge.jsdelivr.net{{ github.repository }}@release/${file}" || true
           done
 
       - name: Remove temporary files
