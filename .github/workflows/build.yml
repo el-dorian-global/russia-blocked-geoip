@@ -1,4 +1,4 @@
-name: Build geoip files
+name: Build geoip files 11
 
 on:
   workflow_dispatch:
@@ -41,18 +41,15 @@ jobs:
           echo "TAG_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
           echo "RELEASE_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
 
+      - name: Prepare whitelist
+        run: |
+          cp custom/ips.txt geoip/ips.txt
+          wc -l geoip/ips.txt
+
       - name: Inject mobile whitelist
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
-
-          if [ ! -f custom/ips.txt ]; then
-            echo "custom/ips.txt not found"
-            exit 1
-          fi
-
-          echo "List size:"
-          wc -l custom/ips.txt
 
           cp config.json geoip/config.json
 
@@ -61,7 +58,7 @@ jobs:
             "action": "add",
             "args": {
               "name": "mob-whitelist",
-              "uri": "file://../custom/ips.txt"
+              "uri": "file://./ips.txt"
             }
           }] |
           (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mob-whitelist"]' \
