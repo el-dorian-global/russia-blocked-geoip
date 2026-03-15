@@ -80,6 +80,7 @@ jobs:
       - name: Build geoip databases
         run: |
           cd geoip
+          run: ls -lah geoip
           ../geoip-bin convert -c config.json
 
       - name: Verify mmdb files
