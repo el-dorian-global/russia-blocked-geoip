@@ -52,23 +52,26 @@ jobs:
           echo "RELEASE_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
         shell: bash
 
-      - name: Inject mobile blacklist and fix config
+      - name: Inject mobile whitelist and fix config
         run: |
+          # Копируем конфиг из твоего репозитория в папку генератора
           cp config.json geoip/config.json
-          cp mobile-whitelist/ipwhitelist.txt geoip/mobile-blacklist.txt
+          # Копируем скачанный вайтлист в папку генератора
+          cp mobile-whitelist/ipwhitelist.txt geoip/mobile-whitelist.txt
+          
           sudo apt-get update && sudo apt-get install -y jq
 
-          # Добавляем в input и во ВСЕ нужные wantedList в секции output
+          # 1. Добавляем в секцию input новый источник
+          # 2. Добавляем "mobile-whitelist" во все списки wantedList в output
           jq '.input += [{
             "type": "text",
             "action": "add",
             "args": {
-              "name": "mobile-blacklist",
-              "uri": "file://geoip/mobile-blacklist.txt"
+              "name": "mobile-whitelist",
+              "uri": "file://./mobile-whitelist.txt"
             }
           }] | 
-          (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mobile-blacklist"] |
-          (.output[] | select(.args.overwriteList != null) | .args.overwriteList) += ["mobile-blacklist"]' \
+          (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mobile-whitelist"]' \
           geoip/config.json > geoip/config-new.json
 
           mv geoip/config-new.json geoip/config.json
@@ -83,9 +86,9 @@ jobs:
 
       - name: Verify mmdb files
         run: |
-          cd ./output || exit 1
-          go install -v ://github.com
-          for name in *.mmdb; do
+          go install ://github.com
+          for name in ./output/*.mmdb; do
+            [ -f "$name" ] || continue
             $(go env GOPATH)/bin/mmdbverify -file "${name}"
           done
 
@@ -93,8 +96,16 @@ jobs:
         run: |
           cd ./output || exit 1
           for name in *.dat *.mmdb; do
+            [ -f "$name" ] || continue
             sha256sum "${name}" > "${name}.sha256sum"
           done
+
+      - name: Remove temporary files
+        run: |
+          # Удаляем лишнее ДО пуша и релиза
+          rm -rf ./output/*.{gz,zip}
+          rm -rf ./output/GeoLite2-*
+          rm -rf ./output/{clash,dat,mrs,nginx,srs,surge,text}
 
       - name: Git push assets to "release" branch
         run: |
@@ -108,21 +119,6 @@ jobs:
           git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}"
           git push -f origin release
 
-      - name: Purge jsdelivr CDN
-        run: |
-          cd output || exit 1
-          for file in *; do
-            curl -s "https://purge.jsdelivr.net{{ github.repository }}@release/${file}" || true
-          done
-
-      - name: Remove temporary files
-        run: |
-          rm -rf ./output/*.{gz,zip}
-          rm -rf ./output/GeoLite2-*.csv
-          rm -rf ./output/GeoLite2-*.mmdb
-          rm -rf ./output/GeoLite2-*.sha256sum
-          rm -rf ./output/{clash,dat,mrs,nginx,srs,surge,text}
-
       - name: Upload files to GitHub release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -132,3 +128,11 @@ jobs:
           release_name: ${{ env.RELEASE_NAME }}
           tag: ${{ env.TAG_NAME }}
           overwrite: true
+
+      - name: Purge jsdelivr CDN
+        run: |
+          cd output || exit 1
+          for file in *; do
+            [ -f "$file" ] || continue
+            curl -s "https://purge.jsdelivr.net{{ github.repository }}@release/${file}" || true
+          done
