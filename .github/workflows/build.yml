@@ -60,11 +60,11 @@ jobs:
             "type": "text",
             "action": "add",
             "args": {
-              "name": "mobile-whitelist",
+              "name": "mob-whitelist",
               "uri": "file://'$(pwd)'/custom/ips.txt"
             }
           }] |
-          (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mobile-whitelist"]' \
+          (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mob-whitelist"]' \
           geoip/config.json > geoip/config-new.json
 
           mv geoip/config-new.json geoip/config.json
