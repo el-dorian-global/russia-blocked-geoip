@@ -64,7 +64,7 @@ jobs:
             "action": "add",
             "args": {
               "name": "mob-whitelist",
-              "uri": "file://'${{ github.workspace }}'/geoip/ips.txt"
+              "uri": "./ips.txt"
             }
           }] |
           (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mob-whitelist"]' \
@@ -80,20 +80,20 @@ jobs:
       - name: Build geoip databases
         run: |
           cd geoip
-          run: ls -lah geoip
+          ls -lah
           ../geoip-bin convert -c config.json
 
       - name: Verify mmdb files
         run: |
           go install github.com/maxmind/mmdbverify@latest
-          for name in ./output/*.mmdb; do
+          for name in ./geoip/output/*.mmdb; do
             [ -f "$name" ] || continue
             $(go env GOPATH)/bin/mmdbverify -file "${name}"
           done
 
       - name: Generate sha256 checksums
         run: |
-          cd output
+          cd geoip/output
           for name in *.dat *.mmdb; do
             [ -f "$name" ] || continue
             sha256sum "${name}" > "${name}.sha256sum"
@@ -101,13 +101,13 @@ jobs:
 
       - name: Remove temporary files
         run: |
-          rm -f ./output/*.gz ./output/*.zip || true
-          rm -rf ./output/GeoLite2-* || true
-          rm -rf ./output/{clash,dat,mrs,nginx,srs,surge,text} || true
+          rm -f ./geoip/output/*.gz ./geoip/output/*.zip || true
+          rm -rf ./geoip/output/GeoLite2-* || true
+          rm -rf ./geoip/output/{clash,dat,mrs,nginx,srs,surge,text} || true
 
       - name: Git push assets to release branch
         run: |
-          cd output
+          cd geoip/output
           git init
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -124,14 +124,14 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file_glob: true
-          file: ./output/*
+          file: ./geoip/output/*
           release_name: ${{ env.RELEASE_NAME }}
           tag: ${{ env.TAG_NAME }}
           overwrite: true
 
       - name: Purge jsdelivr CDN
         run: |
-          cd output
+          cd geoip/output
           for file in *; do
             [ -f "$file" ] || continue
             curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@release/${file}" || true
