@@ -5,15 +5,17 @@ on:
     - cron: "0 3,9,15,21 * * *"
   push:
     branches:
-      - master
+      - main
     paths-ignore:
       - ".gitignore"
       - "LICENSE*"
       - "*.md"
+
 jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v4
@@ -26,6 +28,12 @@ jobs:
           repository: runetfreedom/geoip
           path: geoip
 
+      - name: Checkout mobile whitelist
+        uses: actions/checkout@v4
+        with:
+          repository: hxehex/russia-mobile-internet-whitelist
+          path: mobile-whitelist
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -36,6 +44,11 @@ jobs:
           echo "TAG_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
           echo "RELEASE_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
         shell: bash
+
+      - name: Add mobile whitelist IP
+        run: |
+          mkdir -p geoip/custom
+          cp mobile-whitelist/ipwhitelist.txt geoip/custom/mobile-whitelist.txt
 
       - name: Build geoip files
         run: |
