@@ -12,6 +12,10 @@ on:
       - "LICENSE*"
       - "*.md"
 
+# Добавляем права на запись для GitHub Actions
+permissions:
+  contents: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -42,6 +46,8 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: ./geoip/go.mod
+          # Указываем, где искать файл для расчета хэша кэша
+          cache-dependency-path: ./geoip/go.sum
 
       - name: Set variables
         run: |
@@ -50,12 +56,9 @@ jobs:
 
       - name: Inject mobile whitelist into geoip config
         run: |
-          # Копируем файл со списком IP в рабочую директорию генератора
           cp mobile-whitelist/ipwhitelist.txt geoip/mobile-whitelist.txt
-
           sudo apt-get update && sudo apt-get install -y jq
-
-          # Важно: добавляем и в 'input' (как источник), и в 'rules' (как правило сборки)
+          
           jq '.input += [{
             "type": "text",
             "tag": "mobile-whitelist",
@@ -64,12 +67,11 @@ jobs:
             "tag": "mobile-whitelist",
             "file": "mobile-whitelist.txt"
           }]' geoip/config.json > geoip/config-new.json
-
           mv geoip/config-new.json geoip/config.json
 
       - name: Build geoip generator
         run: |
-          go build -C geoip -o ../geoip-bin ./
+          cd geoip && go build -o ../geoip-bin ./
 
       - name: Build geoip databases
         run: |
@@ -80,21 +82,14 @@ jobs:
           cd ./output || exit 1
           go install ://github.com
           for name in *.mmdb; do
-            $(go env GOPATH)/bin/mmdbverify -file ${name}
+            $(go env GOPATH)/bin/mmdbverify -file "${name}"
           done
 
-      - name: Generate sha256 checksum for dat files
+      - name: Generate sha256 checksums
         run: |
           cd ./output || exit 1
-          for name in *.dat; do
-            sha256sum ${name} > ${name}.sha256sum
-          done
-
-      - name: Generate sha256 checksum for mmdb files
-        run: |
-          cd ./output || exit 1
-          for name in *.mmdb; do
-            sha256sum ${name} > ${name}.sha256sum
+          for name in *.dat *.mmdb; do
+            sha256sum "${name}" > "${name}.sha256sum"
           done
 
       - name: Push files to release branch
@@ -103,28 +98,26 @@ jobs:
           git init
           git checkout -b release
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "${{ env.RELEASE_NAME }}"
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}
+          # Используем стандартный метод аутентификации через заголовок или URL
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}"
           git push origin release --force
 
       - name: Purge jsdelivr CDN
         run: |
           cd output || exit 1
           for file in *; do
-            curl -s "https://purge.jsdelivr.net{{ github.repository }}@release/${file}"
+            curl -s "https://purge.jsdelivr.net{{ github.repository }}@release/${file}" || true
           done
 
       - name: Remove files not needed for GitHub release
         run: |
-          # Удаляем временные и лишние форматы перед созданием релиза GitHub
           rm -rf ./output/*.{gz,zip}
           rm -rf ./output/GeoLite2-*.csv
           rm -rf ./output/GeoLite2-*.mmdb
           rm -rf ./output/GeoLite2-*.sha256sum
-          # ВНИМАНИЕ: Если mobile-whitelist попал в папку text, 
-          # эта команда его удалит из релиза (но он останется в ветке release)
           rm -rf ./output/{clash,dat,mrs,nginx,srs,surge,text}
 
       - name: Upload files to GitHub release
@@ -135,3 +128,4 @@ jobs:
           file: ./output/*
           release_name: ${{ env.RELEASE_NAME }}
           tag: ${{ env.TAG_NAME }}
+          overwrite: true
