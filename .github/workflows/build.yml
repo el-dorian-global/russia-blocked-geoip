@@ -61,7 +61,7 @@ jobs:
             "action": "add",
             "args": {
               "name": "mob-whitelist",
-              "uri": "file://'$(pwd)'/custom/ips.txt"
+              "uri": "file://../custom/ips.txt"
             }
           }] |
           (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mob-whitelist"]' \
