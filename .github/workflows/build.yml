@@ -44,7 +44,7 @@ jobs:
       - name: Prepare whitelist
         run: |
           curl -L https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/main/ipwhitelist.txt -o geoip/ips.txt
-          wc -l geoip/ips.txt
+          wc -l ips.txt
 
       - name: Inject mobile whitelist
         run: |
@@ -52,13 +52,14 @@ jobs:
           sudo apt-get install -y jq
 
           cp config.json geoip/config.json
+          cp ips.txt geoip/ips.txt
 
           jq '.input += [{
             "type": "text",
             "action": "add",
             "args": {
               "name": "mob-whitelist",
-              "uri": "file://./ips.txt"
+              "uri": "file://'${{ github.workspace }}'/geoip/ips.txt"
             }
           }] |
           (.output[] | select(.args.wantedList != null) | .args.wantedList) += ["mob-whitelist"]' \
