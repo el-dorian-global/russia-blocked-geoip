@@ -44,7 +44,12 @@ jobs:
       - name: Prepare whitelist
         run: |
           curl -L https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/main/ipwhitelist.txt -o geoip/ips.txt
-          wc -l ips.txt
+          wc -l geoip/ips.txt
+          echo "Downloaded whitelist..."
+          echo "Lines in whitelist:"
+          wc -l geoip/ips.txt
+          echo "First 5 lines:"
+          head -n 5 geoip/ips.txt
 
       - name: Inject mobile whitelist
         run: |
